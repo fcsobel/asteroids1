@@ -157,20 +157,10 @@ function animate() {
         element.update();    
     });
 
-    // player 1 controls
-    //player.velocity.x = 0;
-    //player.velocity.y = 0;
-
+    // Accelleration
     if (keys.up.pressed) { player.accelleration = SPEED;  } else { player.accelleration = 0; }
 
-    //if (keys.up.pressed) {
-    //    player.velocity.x = Math.cos(player.rotation) * SPEED;
-    //    player.velocity.y = Math.sin(player.rotation) * SPEED;
-   // }
-    //else{
-    //    player.velocity.x *= FRICTION;
-     //   player.velocity.y *= FRICTION;
-    //}
+    // Rotation
     if (keys.right.pressed) { player.rotation += ROTATION_SPEED; }
     if (keys.left.pressed) { player.rotation -= ROTATION_SPEED; }
 }
