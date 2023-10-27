@@ -2,13 +2,28 @@ const canvas = document.querySelector('canvas');
 const context = canvas.getContext('2d');
 canvas.width = window.innerWidth -50;
 canvas.height = window.innerHeight -50;
+let zoom = 1.0;
+//canvas.width = (window.innerWidth) * zoom;
+//canvas.height = (window.innerHeight) * zoom;
+//canvas.width = (window.innerWidth - (50 * zoom)) * zoom;
+//canvas.height = (window.innerHeight -(50 * zoom)) * zoom;
+//context.scale(1/zoom,1/zoom);
+//canvas.width = window.innerWidth * 2 -100;
+//canvas.height = window.innerHeight * 2 -100;
+context.scale(1 / zoom, 1 / zoom);
+
+const SPEED = 0.05;
+const ROTATION_SPEED = 0.05;
+const FRICTION = 0.995;
 
 class GameObject {
-    constructor({ position, velocity, rotation, accelleration }) {
+    constructor({ position, velocity, rotation, accelleration, friction, status }) {
         this.position = position;
         this.velocity = velocity;
         this.rotation = rotation;
         this.accelleration = accelleration;
+        this.friction = friction ?? FRICTION;
+        this.status = status ?? { amount: 0 };
     }    
     draw() {}
     update() {
@@ -19,8 +34,8 @@ class GameObject {
         this.velocity.y += Math.sin(this.rotation) * this.accelleration;
         
         // friction
-        this.velocity.x *= FRICTION;
-        this.velocity.y *= FRICTION;
+        this.velocity.x *= this.friction;
+        this.velocity.y *= this.friction;
 
         // update postion based on velovity
         this.position.x += this.velocity.x;
@@ -29,13 +44,14 @@ class GameObject {
 }
 
 class Projectile extends GameObject {
-    constructor({ position, velocity, rotation, accelleration }) {
-        super({ position, velocity, rotation, accelleration });
+    constructor({ position, velocity, rotation, accelleration, status }) {
+        super({ position, velocity, rotation, accelleration, status });
+        this.radius = 5;
     }
     draw() {
         context.save();
         context.beginPath();
-        context.arc(this.position.x, this.position.y, 5, 0, Math.PI * 2, false);
+        context.arc(this.position.x, this.position.y, this.radius, 0, Math.PI * 2, false);
         context.fillStyle = 'blue';
         context.fill();
         context.closePath();
@@ -43,9 +59,40 @@ class Projectile extends GameObject {
     }    
 }
 
+
+class Asteroid extends GameObject {
+    constructor({ position, velocity, rotation, accelleration, friction, status }) {
+        super({ position, velocity, rotation, accelleration, friction, status });
+        this.radius = 50 * Math.random() + 10;        
+    }
+
+    draw() {
+        context.save();
+        context.beginPath();
+        context.arc(this.position.x, this.position.y, this.radius, 0, Math.PI * 2, false);
+        
+        context.strokeStyle = 'white';
+        if (this.status.amount > 0)
+        {
+            console.log('yellow');
+            context.fillStyle = 'yellow';
+            console.log('status', this.status.amount);
+        }
+        else
+        {
+            console.log('no status', this.status.amount);
+        }
+        context.fill();
+        context.stroke();
+        context.closePath();
+        //context.restore();
+    }    
+}
+
 class Player extends GameObject {
     constructor({ position, velocity, rotation, accelleration }) {
         super({ position, velocity, rotation, accelleration });
+        this.radius = 10;
     }
     draw() {
         context.save();
@@ -69,6 +116,10 @@ class Player extends GameObject {
 
         // draw path
         context.strokeStyle = 'white';
+        if (this.status.amount > 0)
+        {
+            context.strokeStyle = 'yellow';
+        }
         context.stroke();
 
         context.restore();
@@ -98,7 +149,7 @@ const player = new Player({
 });
 
 const player2 = new Player({
-    position: { x: 100, y: 100 },
+    position: { x: 300, y: 100 },
     velocity: { x: 0, y: 0 },
     rotation: 0,
     accelleration: 0
@@ -107,6 +158,7 @@ const player2 = new Player({
 const players = [player, player2];
 
 window.addEventListener('keydown', (event) => {
+    
     switch (event.code) {
         case 'ArrowUp':
             keys.up.pressed = true;
@@ -117,7 +169,19 @@ window.addEventListener('keydown', (event) => {
         case 'ArrowLeft':
             keys.left.pressed = true;
             break;
-    }
+        case 'KeyZ':
+            if (zoom == 1.0)
+            {
+                zoom = 2.0;
+                context.scale(1 / zoom, 1 / zoom);    
+            }
+            else
+            {
+                zoom = 1.0;
+                context.scale(2, 2);
+            }
+            break;    
+        }
 });
 window.addEventListener('keyup', (event) => {
     switch (event.code) {
@@ -136,26 +200,104 @@ window.addEventListener('keyup', (event) => {
         }
 });
 
+document.addEventListener('wheel', DoSomething);
+document.addEventListener('mousewheel', DoSomething);
+document.addEventListener('DOMMouseScroll', DoSomething);
+
+function DoSomething(event)
+{
+    if (event.deltaY < 0.0)
+    {
+        //zoom = 2.0;
+        zoom = zoom + 1;
+        context.scale(1 / 2, 1 / 2);    
+    }
+    else
+    {
+        if (zoom > 1)
+        {
+            //zoom = 1.0;
+            zoom = zoom - 1;
+            context.scale(2, 2);
+        }
+    }
+    return false;
+}
+
+
 const keys = {
     up: { pressed: false },
     right: { pressed: false },
     left: { pressed: false }
 }
 
-const SPEED = 0.05;
-const ROTATION_SPEED = 0.05;
-const FRICTION = 0.995;
+function CheckCollision(from, to)
+{
+    let circle1 = from.position;
+    let circle2 = to.position;
+
+    if (circle1.x <= 100) return false;
+    if (circle1.y <= 100) return false;
+    if (circle2.x <= 100) return false;
+    if (circle2.y <= 100) return false;
+
+    let xDifference = circle2.x - circle1.x;
+    let yDifference = circle2.y - circle1.y;
+
+    let distance = Math.sqrt(xDifference * xDifference + yDifference * yDifference);
+
+    if (distance <= from.radius + to.radius)
+    {
+       return true;
+    }
+    return false;
+}
 
 // game loop
 function animate() {
     window.requestAnimationFrame(animate);
 
     context.fillStyle = 'black';
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.fillRect(0, 0, canvas.width * zoom, canvas.height * zoom);
 
-    players.forEach(element => {
+
+    for (let i = 0; i < players.length; i++) {
+        let element = players[i];
+        
         element.update();    
-    });
+
+        for (let j = i + 1; j < players.length; j++) {
+            let target = players[j];
+        
+            if (CheckCollision(element, target) == true)
+            {       
+                target.velocity.x = 0;              
+                target.velocity.y = 0;              
+                target.status.amount = 1;     
+                element.status.amount = 1;     
+                
+                //target.velocity = { x: target.velocity.x + element.velocity.x, y: target.velocity.y +  element.velocity.y};
+                //element.velocity = { x: element.velocity.x + target.velocity.x, y: element.velocity.y +  target.velocity.y};
+                //element.status = 1;
+            }
+        }  
+    }
+
+
+    // players.forEach(element => {
+    //     element.update();    
+    //     players.forEach(target => {
+    //         if (element != target)
+    //         {
+    //             if (CheckCollision(element, target) == true)
+    //             {             
+    //                 target.status = 1;
+    //                 target.velocity = { x: target.velocity.x + element.velocity.x, y: target.velocity.y +  element.velocity.y};
+    //                 //element.status = 1;
+    //             }
+    //         }
+    //     });
+    // });
 
     // Accelleration
     if (keys.up.pressed) { player.accelleration = SPEED;  } else { player.accelleration = 0; }
@@ -168,6 +310,31 @@ function animate() {
 animate();
 
 player2.fire();
+
+window.setInterval(() => {
+   
+    let asteroid = new Asteroid(
+        {
+            position:
+            {
+                x:0,
+                y:0
+            },
+            velocity:
+            {
+                x: 1,
+                y: 1
+            },
+            rotation: 0,
+            accelleration: 0,
+            friction: 1
+        });
+
+    //console.log('add asterpoid', asteroid);
+
+    players.push(asteroid);
+
+}, 3000);
 
 
 
